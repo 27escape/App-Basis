@@ -1,3 +1,5 @@
+03. 2014-04-22
+  * appbasis script using correct library now.
 0.2 2014-04-22
   * fixing minor pod issues
   * config now uses App::Basis::PROGRAM as default config filename
