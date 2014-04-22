@@ -1,6 +1,7 @@
-0.2
+0.2 2014-04-22
   * fixing minor pod issues
   * config now uses App::Basis::PROGRAM as default config filename
   * appbasis script nicely handles a missing parameter
+  * help now shows short options too (thanks to Arturo Escaip)
 0.1 2014-03-20 
   * initial CPAN release
