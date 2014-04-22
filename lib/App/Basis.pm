@@ -610,6 +610,7 @@ B<Parameters>
 
 sub fix_filename {
     my $file = shift;
+    return if( !$file) ;
 
     $file =~ s/^~/$ENV{HOME}/;
     if ( $file =~ m|^\.\./| ) {
@@ -619,6 +620,8 @@ sub fix_filename {
     if ( $file =~ m|^\./| || $file eq '.' ) {
         $file =~ s|^(\.)/?|$ENV{PWD}|;
     }
+    # replace multiple separators
+    $file =~ s|//|/|g ;
     return $file;
 }
 
