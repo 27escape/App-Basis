@@ -290,17 +290,6 @@ sub init_app {
         if ( $name ne 'help' ) {
             my $desc = $full_options{$name}->{desc};
 
-            # # show the right way to use the options, single chars get - prefix
-            # # names get -- prefix
-            # my $dname = $name;
-            # $dname .= '*' if ( $full_options{$name}->{required} );
-            # $dname = ( length($dname) > 1 ? '--' : '-' ) . $dname;
-            # my $sep = 15 - length($dname);
-            # $sep = 0 if ( $sep < 0 );
-            # $desc .= " [DEFAULT: $full_options{$name}->{default}]"
-            #     if ( $full_options{$name}->{default} );
-            # $_app_simple_help_options .= "    $dname" . ( ' ' x $sep ) . " $desc\n";
-
             # show the right way to use the options
             my $dname = $dnames{$o};
             $dname .= '*' if ( $full_options{$name}->{required} );
@@ -584,12 +573,11 @@ B<Parameters>
 sub run_cmd {
     my $cmd = shift;
 
-    # use our path and not the system one so that it can pass taint checks
-    local $ENV{PATH} = "/bin:/usr/bin:/usr/local/bin:$ENV{HOME}/bin";
+    # use our local version of path so that it can pass taint checks
+    local $ENV{PATH} = $ENV{PATH} ;
 
     my ( $ret, $err, $full_buff, $stdout_buff, $stderr_buff ) = run( command => $cmd );
 
-    # my $full = join( "\n", @{$full_buff}) ;
     my $stdout = join( "\n", @{$stdout_buff} );
     my $stderr = join( "\n", @{$stderr_buff} );
 
