@@ -251,7 +251,6 @@ sub init_app {
     $_app_simple_help_options .= sprintf $help_fmt, $dnames{'help|h|?'}, 'Show help';
 
     # get options and their descriptions
-    # foreach my $o ( sort keys %{ $args{options} } ) {
     foreach my $o (@keys) {
 
         # save the option
