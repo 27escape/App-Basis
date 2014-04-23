@@ -1,4 +1,9 @@
-03. 2014-04-22
+0.4 2014-04-23
+  * clean filename in fix_filename
+  * remove some comments
+  * local PATH for run_cmd
+  * renaming tests
+0.3 2014-04-22
   * appbasis script using correct library now.
 0.2 2014-04-22
   * fixing minor pod issues
