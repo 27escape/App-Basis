@@ -6,7 +6,30 @@
 
 =head1 SYNOPSIS
 
+    use 5.10.0 ;
+    use strict ;
+    use warnings ;
+    use POSIX qw(strftime) ;
     use App::Basis
+
+    sub ctrlc_func {
+        # code to decide what to do when CTRL-C is pressed    
+    }
+
+    sub cleanup_func {
+        # optionally clean up things when the script ends
+    }
+
+    sub debug_func {
+    my ($lvl, $debug) = @_;
+        if(!$debug) {
+            $debug = $lvl ;
+            # set a default level
+            $lvl = 'INFO' ;
+        }
+
+        say STDERR strftime( '%Y-%m-%d %H:%M:%S', gmtime( time() ) ) . " [$lvl] " . get_program() . " " . $debug;    
+    }
 
     # main
     my %opt = App::Basis::init_app(
@@ -60,6 +83,8 @@ If you choose to use App::Basis::Config then you will find easy methods to manag
 
 There are (or will be) other App::Basis modules available to help you write scripts without you having to do complex things
 or write lots of code.
+
+There is a helper script to create the boilerplate for an appbasis script, see L<appbasis>
 
 =cut
 
@@ -421,10 +446,10 @@ B<Sample output help>
     About:  Boiler plate code for an App::Basis app
 
     [options]
-        --help          Show help
-        --item          another item [DEFAULT: 123]
-        --test          test item [DEFAULT: testing 123]
-        --verbose       Dump extra useful information
+        -h, --help          Show help
+        -i, --item          another item [DEFAULT: 123]
+        -t, --test          test item [DEFAULT: testing 123]
+        -v --verbose        Dump extra useful information
 
 =cut
 
