@@ -18,9 +18,8 @@ use v5.10 ;
 use strict ;
 use warnings ;
 
-use Test::More tests => 17 ;
-use File::Slurp ;
-use Data::Printer ;
+use Test::More tests => 19 ;
+use Path::Tiny ;
 
 BEGIN { use_ok('App::Basis::Config') ; }
 
@@ -38,7 +37,7 @@ EOF
 
 my $config_file = "/tmp/$$.test" ;
 push @cleanup, $config_file ;
-write_file( $config_file, $config_str ) ;
+path( $config_file)->spew( $config_str ) ;
 
 my $cfg = App::Basis::Config->new( filename => $config_file ) ;
 isa_ok( $cfg, 'App::Basis::Config' ) ;
@@ -91,6 +90,13 @@ $new->set( "/one/two/three", "four") ;
 ok( $new->get("/one/two/three") eq "four", 'set deep path' ) ;
 $new->store() ;
 ok( -f $another_file, "Stored new file") ;
+
+# store and retrive hashes
+$data = { fred => 'one', bill => 2, barney => { value => 'three'} } ;
+$new->set( "/complex", $data) ;
+is_deeply( $new->raw->{complex}, $data, 'Store complex' ) ;
+my $complex = $new->get( '/complex') ;
+is_deeply( $complex, $data, 'retrieve complex' ) ;
 
 # and clean up the files we have created
 map { unlink $_ ; } @cleanup ;
