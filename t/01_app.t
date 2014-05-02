@@ -248,6 +248,7 @@ my $program = basename $0 ;
 ok( get_program() eq $program, 'get_program correct' );
 
 # windows has DIR command everything else should hopefully have ls
+my ( $r, $o, $e );
 if ( $^O =~ /MSWin32/ ) {
     ( $r, $o, $e ) = run_cmd('dir');
 }
