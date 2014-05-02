@@ -46,8 +46,9 @@ package App::Basis::Config;
 use 5.010;
 use warnings;
 use strict;
-use Moo ;
-use YAML qw( LoadFile DumpFile);
+use Moo;
+use YAML qw( Load Dump);
+use Path::Tiny;
 use Try::Tiny;
 use App::Basis;    # let us use some of the App::Basis singletons
 
@@ -69,7 +70,7 @@ has raw => (
     lazy => 1,
 
     # builder  => '_load',
-    init_arg => undef,       # dont allow setting in constructor
+    init_arg => undef,        # dont allow setting in constructor
     default  => sub { {} },
     writer   => '_set_raw'
 );
@@ -82,7 +83,12 @@ has filename => (
 
 has nostore => (
     is      => 'ro',
-    default => sub { 0 }
+    default => sub {0}
+);
+
+has die_on_error => (
+    is      => 'ro',
+    default => sub {0}
 );
 
 =item has_data
@@ -93,7 +99,7 @@ test if there is any data in the config
 
 has has_data => (
     is       => 'ro',
-    default  => sub { 0 },
+    default  => sub {0},
     init_arg => undef,            # dont allow setting in constructor
     writer   => '_set_has_data'
 );
@@ -119,9 +125,9 @@ B<Parameter>
 
 has changed => (
     is       => 'rw',
-    default  => sub { 0 },
-    init_arg => undef,       # dont allow setting in constructor
-                             # writer   => '_set_changed'
+    default  => sub {0},
+    init_arg => undef,     # dont allow setting in constructor
+                           # writer   => '_set_changed'
 );
 
 =item error
@@ -132,8 +138,8 @@ access last error generated (just a descriptive string)
 
 has error => (
     is       => 'ro',
-    default  => sub { undef },
-    init_arg => undef,           # dont allow setting in constructor
+    default  => sub {undef},
+    init_arg => undef,         # dont allow setting in constructor
     writer   => '_set_error'
 );
 
@@ -144,7 +150,9 @@ has error => (
 Create a new instance of a config object, read config data from passed filename
 
 B<Parameters>  passed in a HASH
-    filename    - name of file to load/save config from
+    filename      - name of file to load/save config from
+    nostore       - prevent store operation (optional)
+    die_on_error  - die if we have any errors
 
 =cut
 
@@ -168,11 +176,12 @@ sub BUILD {
 
         my $config;
         try {
-            $config = LoadFile($fname);
+            $config = Load( path($fname)->slurp_utf8 );
         }
         catch {
             $self->_set_error("Could not read/processs config file $fname. $_");
         };
+        die $self->error if ( $self->error && $self->die_on_error );
 
         # if we loaded some config
         if ( keys %$config ) {
@@ -182,6 +191,8 @@ sub BUILD {
     }
     else {
         $self->_set_error("could not establish a config filename");
+        die $self->error if ( $self->die_on_error );
+
         # $self->_set_raw( {}) ;
     }
 }
@@ -206,7 +217,7 @@ sub store {
     my $status    = 0;
 
     local $YAML::Indent = 4;
-    
+
     $self->_set_error(undef);
     if ( !$filename ) {
         $filename = $self->filename;
@@ -226,12 +237,17 @@ sub store {
         # do the save
         my $cfg = $self->raw;
         try {
-            DumpFile( $filename, $cfg );
+            # do we need to create the directory to hold the file
+            if ( !-d path($filename)->dirname ) {
+                path($filename)->dirname->mkpath;
+            }
+            path($filename)->spew_utf8( Dump($cfg) );
         }
         catch {
             $self->_set_error( "Could not save config file " . $self->filename() );
             $status = 0;
         };
+        die $self->error if ( $self->error && $self->die_on_error );
         $self->changed(0);
         $status = 1;
     }
@@ -255,34 +271,37 @@ sub _split_path {
 
     my $ref = $self->raw;
     my @items = split( /[$path_separators]/, $path );
-    for ( my $i = 0; $i < scalar(@items); $i++ ) {
-        my $item = $items[$i];
-        if ( $ref->{$item} ) {
-            $ref  = $ref->{$item};
-            $done = 1;
-        }
-        else {
-            if ($value) {
-
-                # is this the last thing?
-                if ( ( $i + 1 ) == scalar(@items) ) {
-
-                    # save the value in the last node
-                    $ref->{$item} = $value;
-                }
-                else {
-                    $ref->{$item} = {};
-                }
+    try {
+        for ( my $i = 0; $i < scalar(@items); $i++ ) {
+            my $item = $items[$i];
+            if ( $ref->{$item} ) {
                 $ref  = $ref->{$item};
                 $done = 1;
             }
             else {
+                if ($value) {
 
-                # missed item
-                $done = 0;
+                    # is this the last thing?
+                    if ( ( $i + 1 ) == scalar(@items) ) {
+
+                        # save the value in the last node
+                        $ref->{$item} = $value;
+                    }
+                    else {
+                        $ref->{$item} = {};
+                    }
+                    $ref  = $ref->{$item};
+                    $done = 1;
+                }
+                else {
+
+                    # missed item
+                    $done = 0;
+                }
             }
         }
     }
+    catch {};
 
     return $done ? $ref : undef;
 }

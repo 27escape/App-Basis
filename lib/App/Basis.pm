@@ -21,7 +21,7 @@
     }
 
     sub debug_func {
-    my ($lvl, $debug) = @_;
+        my ($lvl, $debug) = @_;
         if(!$debug) {
             $debug = $lvl ;
             # set a default level

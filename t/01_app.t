@@ -247,10 +247,15 @@ $status = 0;
 my $program = basename $0 ;
 ok( get_program() eq $program, 'get_program correct' );
 
-# note unix only, not doing a windows version of this test
-my ( $r, $o, $e ) = run_cmd('ls');
-ok( !$r, 'run_cmd on valid program' );
+# windows has DIR command everything else should hopefully have ls
+if ( $^O =~ /MSWin32/ ) {
+    ( $r, $o, $e ) = run_cmd('dir');
+}
+else {
+    ( $r, $o, $e ) = run_cmd('ls');
+}
 
+ok( !$r, 'run_cmd on valid program' );
 ( $r, $o, $e ) = run_cmd('ls1234567890');
 ok( $r, 'run_cmd on invalid program' );
 
@@ -258,7 +263,12 @@ ok( $r, 'run_cmd on invalid program' );
 
 my $current = $ENV{PWD};
 my $file    = fix_filename("~/");
-ok( $file eq "$ENV{HOME}/", "fix_filename with tilde" );
+SKIP: {
+    # if there is no home skip the test
+    skip "Missing HOME environment variable", 1 if ( !$ENV{HOME} );
+
+    ok( $file eq "$ENV{HOME}/", "fix_filename with tilde" );
+}
 
 $file = fix_filename("./");
 ok( $file eq $current, "fix_filename with ./" );

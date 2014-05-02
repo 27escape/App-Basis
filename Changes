@@ -1,5 +1,10 @@
-0.6
-  *
+0.7 2014-05-02
+  * Fix tests for windows
+0.6 2014-05-01
+  * App::Basis::Config changes
+    * change to use Path::Tiny to load/store config
+    * add die_on_error to new
+    * cleanly handle missing path items when using get
 0.5 2014-04-25
   * adding extra documentation
 0.4 2014-04-23
