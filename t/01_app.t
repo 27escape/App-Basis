@@ -18,9 +18,8 @@ use v5.10;
 use strict;
 use warnings;
 use Try::Tiny;
-use File::Basename;
-use Data::Printer;
-
+use Path::Tiny ;
+use File::HomeDir ;
 use Test::More tests => 19;
 
 BEGIN { use_ok('App::Basis'); }
@@ -244,7 +243,7 @@ catch {
 ok( $status, 'fails validated parameter' );
 $status = 0;
 
-my $program = basename $0 ;
+my $program = path($0)->basename ;
 ok( get_program() eq $program, 'get_program correct' );
 
 # windows has DIR command everything else should hopefully have ls
@@ -262,14 +261,10 @@ ok( $r, 'run_cmd on invalid program' );
 
 # check fix_filename
 
-my $current = $ENV{PWD};
+my $current = Path::Tiny->cwd;
 my $file    = fix_filename("~/");
-SKIP: {
-    # if there is no home skip the test
-    skip "Missing HOME environment variable", 1 if ( !$ENV{HOME} );
-
-    ok( $file eq "$ENV{HOME}/", "fix_filename with tilde" );
-}
+my $home = File::HomeDir->my_home ;
+ok( $file eq "$home/", "fix_filename with tilde" );
 
 $file = fix_filename("./");
 ok( $file eq $current, "fix_filename with ./" );
