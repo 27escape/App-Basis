@@ -1,3 +1,5 @@
+0.8 2014-05-14
+  * fix ~ replacement with home, esp for windows
 0.7 2014-05-02
   * Fix tests for windows
 0.6 2014-05-01
