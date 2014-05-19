@@ -50,7 +50,6 @@ use Moo;
 use YAML qw( Load Dump);
 use Path::Tiny;
 use Try::Tiny;
-use App::Basis;    # let us use some of the App::Basis singletons
 
 =head1 Public Functions
 
@@ -230,7 +229,7 @@ sub store {
     # only save if we need to
     if ($need_save) {
         if ( $self->nostore ) {
-            debug( "WARN", "Attempt to save config file " . $self->filename . " when nostore has been used" );
+            warn "Attempt to save config file " . $self->filename . " when nostore has been used";
             return 0;
         }
 

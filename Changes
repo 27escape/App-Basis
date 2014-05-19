@@ -1,3 +1,7 @@
+0.9 2014-05-19
+  * remove App::Basis from App::Basis::Config, use warn
+  * add logging to a file as default, rather than to STDERR
+  * new log_file option for init_app
 0.8 2014-05-14
   * fix ~ replacement with home, esp for windows
 0.7 2014-05-02
