@@ -70,7 +70,7 @@ __END__
 |
 |=head1 NAME
 |
-| %%APPNAME%%
+|%%APPNAME%%
 |
 |=head1 SYNOPSIS
 |
@@ -92,23 +92,8 @@ __END__
 use 5.10.0 ;
 use strict;
 use warnings;
-use POSIX qw(strftime) ;
 use App::Basis;
 use App::Basis::Config ;
-
-# -----------------------------------------------------------------------------
-# basic debug to STDERR, redirect to anywhere you like
-
-sub other_debug {
-    my ($lvl, $debug) = @_;
-    if(!$debug) {
-        $debug = $lvl ;
-        # set a default level
-        $lvl = 'INFO' ;
-    }
-
-    say STDERR strftime( '%Y-%m-%d %H:%M:%S', gmtime( time() ) ) . " [$lvl] " . get_program() . " " . $debug;
-}
 
 # -----------------------------------------------------------------------------
 # main
@@ -136,16 +121,17 @@ my %opt = init_app(
 
             # validate => sub { my $val = shift ; return $val eq 'item'}
         }    
-    }
+    },
+    #log_file => "your-logfile",
 );
 
+# debug will go into "~/$program.log" by default
+
 # lets have the config named after this program
-my $cfg = App::Basis::Config->new( filename => "$ENV{HOME}/.$program" ) ;
+my $cfg = App::Basis::Config->new( filename => "~/.$program" ) ;
 # example of using an app specifc config
 my $user = $cfg->get('/appbasis/name') ;
 my $pass = $cfg->get('/appbasis/password') ;
-
-set_debug( \&other_debug );
 
 if ( $opt{verbose} ) {
     debug( "INFO", "Started");

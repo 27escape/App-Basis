@@ -207,7 +207,7 @@ sub debug {
         $_app_simple_objects{logger}->( $level, @debug ) if ( defined $_app_simple_objects{logger} );
     }
     else {
-        path($LOG_FILE)->append_utf8( strftime( '%Y-%m-%d %H:%M:%S', gmtime( time() ) ) . "[$level] " . join( ' ', @debug ) . "\n");
+        path($LOG_FILE)->append_utf8( strftime( '%Y-%m-%d %H:%M:%S', gmtime( time() ) ) . " [$level] " . join( ' ', @debug ) . "\n");
     }
 }
 
@@ -385,7 +385,7 @@ sub init_app {
         }
 
         # call the validation routine if we have one
-        if ( $full_options{$name}->{validate} ) {
+        if ( $_cmd_line_options{$name} && $full_options{$name}->{validate} ) {
             die "need to pass a coderef to validate for option '$name'" if ( !ref( $full_options{$name}->{validate} ) eq 'CODE' );
             die "Option '$name' has validate and should either also have a default or be required"
                 if ( !( $full_options{$name}->{required} || $full_options{$name}->{default} ) );

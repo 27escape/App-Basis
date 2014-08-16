@@ -26,11 +26,12 @@ BEGIN { use_ok('App::Basis::Config') ; }
 my @cleanup ;
 
 # write out some config, then read it back and check it
-# YAML should have blank line at end
+# YAML should have blank line at the end
 my $config_str = <<EOF;
 name: fred
 block: 
-  bill: {item: one}
+    bill: 
+        item: one
 last: item
 
 EOF
@@ -39,7 +40,8 @@ my $config_file = "/tmp/$$.test" ;
 push @cleanup, $config_file ;
 path( $config_file)->spew( $config_str ) ;
 
-my $cfg = App::Basis::Config->new( filename => $config_file ) ;
+# if the config is not processed properly, we will end the test with a die
+my $cfg = App::Basis::Config->new( filename => $config_file, die_on_error => 1 ) ;
 isa_ok( $cfg, 'App::Basis::Config' ) ;
 my $data = $cfg->raw ;
 

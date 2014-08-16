@@ -47,9 +47,10 @@ use 5.010;
 use warnings;
 use strict;
 use Moo;
-use YAML qw( Load Dump);
+use YAML::XS qw( Load Dump);
 use Path::Tiny;
 use Try::Tiny;
+use App::Basis;
 
 =head1 Public Functions
 
@@ -161,14 +162,10 @@ sub BUILD {
     $self->_set_error(undef);
 
     # make sure that the we expand home
-    my $fname = $self->filename;
-    $fname =~ s/^~/$ENV{HOME}/;
+    my $fname = fix_filename( $self->filename );
 
     if ( !$fname ) {
-        $fname = $ENV{APP_BASIS_CFG};
-        if ( !$fname ) {
-            $fname = "$ENV{HOME}/." . $App::Basis::PROGRAM . ".cfg";
-        }
+        $fname = $ENV{APP_BASIS_CFG} || fix_filename( "~/." . get_program() . ".cfg" );
     }
     if ( $fname && -f $fname ) {
         $self->_set_filename($fname);
@@ -178,9 +175,16 @@ sub BUILD {
             $config = Load( path($fname)->slurp_utf8 );
         }
         catch {
-            $self->_set_error("Could not read/processs config file $fname. $_");
+            $self->_set_error(
+                "Could not read/processs config file $fname. $_");
         };
-        die $self->error if ( $self->error && $self->die_on_error );
+
+        # if there was a file to read from and we had an issue then we should
+        # report it back to the caller somehow and make sure its seen.
+        if ( $self->error ) {
+            die $self->error if ( $self->die_on_error );
+            warn $self->error;
+        }
 
         # if we loaded some config
         if ( keys %$config ) {
@@ -191,8 +195,6 @@ sub BUILD {
     else {
         $self->_set_error("could not establish a config filename");
         die $self->error if ( $self->die_on_error );
-
-        # $self->_set_raw( {}) ;
     }
 }
 
@@ -229,7 +231,9 @@ sub store {
     # only save if we need to
     if ($need_save) {
         if ( $self->nostore ) {
-            warn "Attempt to save config file " . $self->filename . " when nostore has been used";
+            warn "Attempt to save config file "
+                . $self->filename
+                . " when nostore has been used";
             return 0;
         }
 
@@ -243,7 +247,8 @@ sub store {
             path($filename)->spew_utf8( Dump($cfg) );
         }
         catch {
-            $self->_set_error( "Could not save config file " . $self->filename() );
+            $self->_set_error(
+                "Could not save config file " . $self->filename() );
             $status = 0;
         };
         die $self->error if ( $self->error && $self->die_on_error );
