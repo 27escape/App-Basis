@@ -13,7 +13,7 @@
     use App::Basis
 
     sub ctrlc_func {
-        # code to decide what to do when CTRL-C is pressed    
+        # code to decide what to do when CTRL-C is pressed
     }
 
     sub cleanup_func {
@@ -28,7 +28,7 @@
             $lvl = 'INFO' ;
         }
 
-        say STDERR strftime( '%Y-%m-%d %H:%M:%S', gmtime( time() ) ) . " [$lvl] " . get_program() . " " . $debug;    
+        say STDERR strftime( '%Y-%m-%d %H:%M:%S', gmtime( time() ) ) . " [$lvl] " . get_program() . " " . $debug;
     }
 
     # main
@@ -39,7 +39,7 @@
         'file|f=s'  => {
             desc => 'local system location of xml data'
             , required => 1
-        } 
+        }
         , 'url|u=s' => {
             desc => 'where to find xml data on the internet'
             , validate => sub { my $url = shift ; return $url =~ m{^(http|file|ftp)://} ; }
@@ -58,6 +58,7 @@
     , ctrl_c   => \&ctrl_c_handler  # override built in ctrl-c handler
     , cleanup  => \&cleanup_func    # optional func to call to clean up
     , debug    => \&debug_func      # optional func to call with debugging data
+    , 'verbose|v' => 'be verbose about things',
     , log_file => "~/log/fred.log"  # alternative place to store default log messages
     ) ;
 
@@ -77,7 +78,7 @@ everyone needs config files and does not want to constantly repeat themselves th
 
 So how is better than other similar modules? I can't say that it is, but it meets my needs.
 
-There is app help available, there is basic debug functionality, which you can extend using your own function, 
+There is app help available, there is basic debug functionality, which you can extend using your own function,
 you can daemonise your script or run a shell command and get the output/stderr/return code.
 
 If you choose to use App::Basis::Config then you will find easy methods to manage reading/saving YAML based config data.
@@ -89,22 +90,26 @@ There is a helper script to create the boilerplate for an appbasis script, see L
 
 =cut
 
-package App::Basis;
+package App::Basis ;
 
-use 5.014;
-use warnings;
-use strict;
-use Getopt::Long;
-use Exporter;
-use File::HomeDir;
-use Path::Tiny;
-use IPC::Cmd qw(run run_forked);
-use List::Util qw(max);
-use POSIX qw(strftime);
+use 5.014 ;
+use warnings ;
+use strict ;
+use Getopt::Long ;
+use Exporter ;
+use File::HomeDir ;
+use Path::Tiny ;
+use IPC::Cmd qw(run run_forked) ;
+use List::Util qw(max) ;
+use POSIX qw(strftime) ;
+use utf8::all ;
+use Digest::MD5 qw(md5_base64) ;
+#use YAML::Tiny::Color ;
+use Data::Format::Pretty::JSON qw(format_pretty) ;
 
-use vars qw( @EXPORT @ISA);
+use vars qw( @EXPORT @ISA) ;
 
-@ISA = qw(Exporter);
+@ISA = qw(Exporter) ;
 
 # this is the list of things that will get imported into the loading packages
 # namespace
@@ -119,26 +124,31 @@ use vars qw( @EXPORT @ISA);
     set_log_file
     fix_filename
     set_test_mode
-);
+    saymd
+    is_verbose
+    set_verbose
+    verbose
+    verbose_data
+    ) ;
 
 # ----------------------------------------------------------------------------
 
-my $PROGRAM  = path($0)->basename;
-my $LOG_FILE = fix_filename("~/$PROGRAM.log");
+my $PROGRAM  = path($0)->basename ;
+my $LOG_FILE = fix_filename("~/$PROGRAM.log") ;
 
 # these variables are held available throughout the life of the app
-my $_app_simple_ctrlc_count = 0;
-my $_app_simple_ctrlc_handler;
-my $_app_simple_help_text    = 'Application has not defined help_text yet.';
-my $_app_simple_help_options = '';
-my $_app_simple_cleanup_func;
-my $_app_simple_help_cmdline = '';
+my $_app_simple_ctrlc_count = 0 ;
+my $_app_simple_ctrlc_handler ;
+my $_app_simple_help_text    = 'Application has not defined help_text yet.' ;
+my $_app_simple_help_options = '' ;
+my $_app_simple_cleanup_func ;
+my $_app_simple_help_cmdline = '' ;
 
-my %_app_simple_objects = ();
-my %_cmd_line_options   = ();
+my %_app_simple_objects = () ;
+my %_cmd_line_options   = () ;
 
 # we may want to die rather than exiting, helps with testing!
-my $_test_mode = 0;
+my $_test_mode = 0 ;
 
 =head1 Public Functions
 
@@ -148,14 +158,14 @@ my $_test_mode = 0;
 
 # ----------------------------------------------------------------------------
 # control how we output things to help with testing
-sub _output {
-    my ( $where, $msg ) = @_;
+sub _output
+{
+    my ( $where, $msg ) = @_ ;
 
     if ( !$_test_mode ) {
         if ( $where =~ /stderr/i ) {
-            say STDERR $msg;
-        }
-        else {
+            say STDERR $msg ;
+        } else {
             say $msg ;
         }
     }
@@ -168,20 +178,21 @@ sub _output {
 Set the name of the log file for the debug function
 
     set_log_file( "/tmp/lof_file_name") ;
-    debug( "INFO", adding to the debug log") ;
+    debug( "INFO", "adding to the debug log") ;
 
 =cut
 
-sub set_log_file {
-    my ($file) = @_;
-    $LOG_FILE = $file;
+sub set_log_file
+{
+    my ($file) = @_ ;
+    $LOG_FILE = $file ;
 }
 
 # ----------------------------------------------------------------------------
 
 =item debug
 
-Write some debug data. If a debug function was passed to init_app that will be 
+Write some debug data. If a debug function was passed to init_app that will be
 used, otherwise we will write to STDERR.
 
     debug( "WARN", "some message") ;
@@ -191,23 +202,28 @@ B<Parameters>
   string used as a 'level' of the error
   array of anything else, normally error description strings
 
-If your script uses App::Basis make sure your modules do too, then any debug 
+If your script uses App::Basis make sure your modules do too, then any debug
 can go to your default debug handler, like log4perl, but simpler!
 
 =cut
 
-sub debug {
-    my ( $level, @debug ) = @_;
+sub debug
+{
+    my ( $level, @debug ) = @_ ;
 
     # we may want to undef the debug object, so no debug comes out
 
     if ( exists $_app_simple_objects{logger} ) {
 
         # run the coderef for the logger
-        $_app_simple_objects{logger}->( $level, @debug ) if ( defined $_app_simple_objects{logger} );
-    }
-    else {
-        path($LOG_FILE)->append_utf8( strftime( '%Y-%m-%d %H:%M:%S', gmtime( time() ) ) . " [$level] " . join( ' ', @debug ) . "\n");
+        $_app_simple_objects{logger}->( $level, @debug )
+            if ( defined $_app_simple_objects{logger} ) ;
+    } else {
+        path($LOG_FILE)
+            ->append_utf8( strftime( '%Y-%m-%d %H:%M:%S', gmtime( time() ) )
+                . " [$level] "
+                . join( ' ', @debug )
+                . "\n" ) ;
     }
 }
 
@@ -215,7 +231,7 @@ sub debug {
 
 =item set_debug
 
-Tell App:Simple to use a different function for the debug calls. 
+Tell App:Simple to use a different function for the debug calls.
 Generally you don't need this if you are using init_app, add the link there.
 
 B<Parameters>
@@ -223,14 +239,167 @@ B<Parameters>
 
 =cut
 
-sub set_debug {
-    my $func = shift;
+sub set_debug
+{
+    my $func = shift ;
     if ( !$func || ref($func) ne "CODE" ) {
-        warn "set_debug function expects a CODE, got a " . ref($func);
+        warn "set_debug function expects a CODE, got a " . ref($func) ;
+    } else {
+        $_app_simple_objects{logger} = $func ;
     }
-    else {
-        $_app_simple_objects{logger} = $func;
+}
+
+# -----------------------------------------------------------------------------
+my $verbose = 1 ;
+
+=item is_verbose
+
+Retrieve verbose flag so it can be checked to perform extra stuff
+
+    # pass verbose onto another script ;
+    run_cmd( "sub_script " . (is_verbose() ? " -v " : "")) ;
+
+=cut
+
+sub is_verbose
+{
+    return $verbose ;
+}
+
+
+=item set_verbose
+
+Turn on use of verbose or verbose_data functions, verbose outputs to STDERR
+its different to debug logging with generally will go to a file
+
+    set_verbose( 1) ;
+    verbose( "note that I performed some action") ;
+
+=cut
+
+sub set_verbose
+{
+    $verbose = shift ;
+}
+
+=item verbose
+
+Write to STDERR if verbose has been turned on
+its different to debug logging with generally will go to a file
+
+    set_verbose( 1) ;
+    verbose( "note that I performed some action") ;
+
+=cut
+
+sub verbose
+{
+    my ($msg) = @_ ;
+    say STDERR $msg if ($verbose) ;
+}
+
+=item verbose
+
+Dump a data structure to STDERR if verbose has been turned on
+its different to debug logging with generally will go to a file
+
+    set_verbose( 1) ;
+    verbose_data( \%some_hash) ;
+
+=cut
+
+sub verbose_data
+{
+# Dump replaced with format_pretty
+    if ( @_ % 2 ) {
+        say STDERR format_pretty(@_) if ($verbose) ;
+
+    } else {
+        my ($data) = @_ ;
+        say STDERR format_pretty($data) if ($verbose) ;
     }
+}
+
+# ----------------------------------------------------------------------------
+# check that the option structure does not have repeated things in it
+# returns string of any issue
+
+sub _validate_options
+{
+    my ($options) = @_ ;
+    my %seen ;
+    my $result = "" ;
+
+    foreach my $opt ( keys %{$options} ) {
+        # options are long|short=, or thing=, or flags long|sort, or long
+        my ( $long, $short ) ;
+        if ( $opt =~ /^(.*?)\|(.*?)=/ ) {
+            $long  = $1 ;
+            $short = $2 ;
+            if ( $seen{$long} ) {
+                $result =
+                    "Long option '$long' has already been used. option line '$opt' is at fault" ;
+                last ;
+            } elsif ( $seen{$short} ) {
+                $result =
+                    "Short option '$short' has already been used. option line '$opt' is at fault" ;
+                last ;
+            }
+            $seen{$short} = 1 ;
+            $seen{$long}  = 1 ;
+        } elsif ( $opt =~ /^(.*?)\|(.*?)$/ ) {
+            $long  = $1 ;
+            $short = $2 ;
+            if ( $seen{$long} ) {
+                $result =
+                    "Long flag '$long' has already been used. option line '$opt' is at fault" ;
+                last ;
+            }
+
+            if ( $seen{$short} ) {
+                $result =
+                    "short flag '$short' has already been used. option line '$opt' is at fault" ;
+                last ;
+            }
+            $seen{$short} = 1 ;
+            $seen{$long}  = 1 ;
+        } elsif ( $opt =~ /^(.*?)=/ ) {
+            $long = $1 ;
+            if ( $seen{$long} ) {
+                $result = "Option '$long' has already been used. option line '$opt' is at fault" ;
+
+                last ;
+            }
+            $seen{$long} = 1 ;
+        } elsif ( $opt =~ /^(.*?)$/ ) {
+            $long = $1 ;
+            if ( $seen{$long} ) {
+                $result = "flag '$long' has already been used. option line '$opt' is at fault" ;
+                last ;
+            }
+            $seen{$long} = 1 ;
+        } elsif ( $opt =~ /^(.*?)\|(.*?)\|(.*?)\$/ ) {
+            $long  = $1 ;
+            $short = $2 ;
+            my $extra = $3 ;
+            if ( $seen{$long} ) {
+                $result = "flag '$long' has already been used. option line '$opt' is at fault" ;
+                last ;
+            }
+            if ( $seen{$short} ) {
+                $result = "flag '$short' has already been used. option line '$opt' is at fault" ;
+                last ;
+            }
+            if ( $seen{$extra} ) {
+                $result = "flag '$extra' has already been used. option line '$opt' is at fault" ;
+                last ;
+            }
+            $seen{$long}  = 1 ;
+            $seen{$short} = 1 ;
+            $seen{$extra} = 1 ;
+        }
+    }
+    return $result ;
 }
 
 # ----------------------------------------------------------------------------
@@ -243,6 +412,7 @@ B<Parameters> hash of these things
     help_cmdline - extra things to put after the sample args on a sample command line (optional)
     cleanup      - coderef of function to call when your script ends (optional)
     debug        - coderef of function to call to save/output debug data (optional, recommended)
+    'verbose'    - use verbose mode (optional) will trigger set_verbose by default
     log_file     - alternate name of file to store debug to
     ctrlc_func   - coderef of function to call when user presses ctrl-C
     options      - hashref of program arguments
@@ -269,57 +439,67 @@ B<Note will die if not passed a HASH of arguments>
 
 =cut
 
-sub init_app {
-    my %args = @_ % 2 ? die("Odd number of values passed where even is expected.") : @_;
-    my @options;
-    my $has_required = 0;
-    my %full_options;
+sub init_app
+{
+    my %args =
+        @_ % 2
+        ? die("Odd number of values passed where even is expected.")
+        : @_ ;
+    my @options ;
+    my $has_required = 0 ;
+    my %full_options ;
 
     if ( $args{log_file} ) {
-        $LOG_FILE = fix_filename( $args{log_file} );
+        $LOG_FILE = fix_filename( $args{log_file} ) ;
     }
 
     if ( $args{debug} ) {
-        set_debug( $args{debug} );
+        set_debug( $args{debug} ) ;
     }
 
     # get program description
-    $_app_simple_help_text    = $args{help_text}    if ( $args{help_text} );
-    $_app_simple_help_cmdline = $args{help_cmdline} if ( $args{help_cmdline} );
+    $_app_simple_help_text = $args{help_text} if ( $args{help_text} ) ;
+    $_app_simple_help_cmdline = $args{help_cmdline}
+        if ( $args{help_cmdline} ) ;
 
-    die "options must be a hashref" if ( ref( $args{options} ) ne 'HASH' );
+    die "options must be a hashref" if ( ref( $args{options} ) ne 'HASH' ) ;
 
-    $args{options}->{'help|h|?'} = 'Show help';
+    $args{options}->{'help|h|?'} = 'Show help' ;
 
-    my @keys         = sort keys %{ $args{options} };
-    my %dnames       = _desc_names(@keys);
-    my $max_desc_len = max( map length, values %dnames ) + 1;
-    my $help_fmt     = "    %-${max_desc_len}s    %s\n";
+    my @keys         = sort keys %{ $args{options} } ;
+    my %dnames       = _desc_names(@keys) ;
+    my $max_desc_len = max( map length, values %dnames ) + 1 ;
+    my $help_fmt     = "    %-${max_desc_len}s    %s\n" ;
 
     # add help text for 'help' first.
-    $_app_simple_help_options .= sprintf $help_fmt, $dnames{'help|h|?'}, 'Show help';
+    $_app_simple_help_options .= sprintf $help_fmt, $dnames{'help|h|?'}, 'Show help' ;
+
+    #
+    my $msg = _validate_options( $args{options} ) ;
+    if ($msg) {
+        die "$msg" ;
+    }
 
     # get options and their descriptions
     foreach my $o (@keys) {
 
         # save the option
-        push @options, $o;
+        push @options, $o ;
 
-        my $name = $o;
+        my $name = $o ;
 
         # we want the long version of the name if its provided
-        $name =~ s/.*?(\w+).*/$1/;
+        $name =~ s/.*?(\w+).*/$1/ ;
 
         # remove any type data
-        $name =~ s/=(.*)//;
+        $name =~ s/=(.*)// ;
 
         if ( ref( $args{options}->{$o} ) eq 'HASH' ) {
             die "parameterised option '$name' require a desc option"
-                if ( !$args{options}->{$o}->{desc} );
-            $full_options{$name} = $args{options}->{$o};
-            $has_required++ if ( $full_options{$name}->{required} );
-        }
-        else {
+                if ( !$args{options}->{$o}->{desc} ) ;
+            $full_options{$name} = $args{options}->{$o} ;
+            $has_required++ if ( $full_options{$name}->{required} ) ;
+        } else {
             $full_options{$name} = {
                 desc => $args{options}->{$o},
 
@@ -328,74 +508,85 @@ sub init_app {
                 # default => '',
                 # required => 0,
                 # validate => sub {}
-            };
+            } ;
         }
 
         # save the option string too
-        $full_options{$name}->{options} = $o;
+        $full_options{$name}->{options} = $o ;
 
         # build the entry for the help text
-        my $desc = $full_options{$name}->{desc};
+        my $desc = $full_options{$name}->{desc} ;
         if ( $name ne 'help' ) {
-            my $desc = $full_options{$name}->{desc};
+            my $desc = $full_options{$name}->{desc} ;
 
             # show the right way to use the options
-            my $dname = $dnames{$o};
-            $dname .= '*' if ( $full_options{$name}->{required} );
+            my $dname = $dnames{$o} ;
+            $dname .= '*' if ( $full_options{$name}->{required} ) ;
 
-            $desc .= " [DEFAULT: $full_options{$name}->{default}]" if ( $full_options{$name}->{default} );
-            $_app_simple_help_options .= sprintf $help_fmt, $dname, $desc;
+            $desc .= " [DEFAULT: $full_options{$name}->{default}]"
+                if ( $full_options{$name}->{default} ) ;
+            $_app_simple_help_options .= sprintf $help_fmt, $dname, $desc ;
         }
-
     }
 
     # show required options
     if ($has_required) {
-        $_app_simple_help_options .= "* required option" . ( $has_required > 1 ? 's' : '' ) . "\n";
+        $_app_simple_help_options .= "* required option" . ( $has_required > 1 ? 's' : '' ) . "\n" ;
     }
 
     # catch control-c, user provided or our default
-    $_app_simple_ctrlc_handler = $args{ctrl_c} ? $args{ctrl_c} : \&_app_simple_ctrlc_func;
-    $SIG{'INT'} = $_app_simple_ctrlc_handler;
+    $_app_simple_ctrlc_handler = $args{ctrl_c} ? $args{ctrl_c} : \&_app_simple_ctrlc_func ;
+    $SIG{'INT'} = $_app_simple_ctrlc_handler ;
 
     # get an cleanup function handler
-    $_app_simple_cleanup_func = $args{cleanup} if ( $args{cleanup} );
+    $_app_simple_cleanup_func = $args{cleanup} if ( $args{cleanup} ) ;
 
     # check command line args
-    GetOptions( \%_cmd_line_options, @options );
+    GetOptions( \%_cmd_line_options, @options ) ;
 
     # help is a built in
-    show_usage() if ( $_cmd_line_options{help} );
+    show_usage() if ( $_cmd_line_options{help} ) ;
 
     # now if we have the extended version we can do some checking
     foreach my $name ( sort keys %full_options ) {
-        warn "Missing desc field for $name" if ( !$full_options{$name}->{desc} );
+        warn "Missing desc field for $name"
+            if ( !$full_options{$name}->{desc} ) ;
         if ( $full_options{$name}->{required} ) {
-            show_usage( "Required option '$name' is missing", 1 ) if ( !( $_cmd_line_options{$name} || $full_options{$name}->{default} ) );
+            show_usage( "Required option '$name' is missing", 1 )
+                if ( !( $_cmd_line_options{$name} || $full_options{$name}->{default} ) ) ;
         }
         if ( $full_options{$name}->{depends} ) {
             if ( !$_cmd_line_options{ $full_options{$name}->{depends} } ) {
-                show_usage( "Option '$name' depends on option '$full_options{$name}->{depends}' but it is missing", 1 );
+                show_usage(
+                    "Option '$name' depends on option '$full_options{$name}->{depends}' but it is missing",
+                    1
+                ) ;
             }
         }
 
         # set a default if there is no value
         if ( $full_options{$name}->{default} ) {
-            $_cmd_line_options{$name} = $full_options{$name}->{default} if ( !$_cmd_line_options{$name} );
+            $_cmd_line_options{$name} = $full_options{$name}->{default}
+                if ( !$_cmd_line_options{$name} ) ;
         }
 
         # call the validation routine if we have one
         if ( $_cmd_line_options{$name} && $full_options{$name}->{validate} ) {
-            die "need to pass a coderef to validate for option '$name'" if ( !ref( $full_options{$name}->{validate} ) eq 'CODE' );
+            die "need to pass a coderef to validate for option '$name'"
+                if ( !ref( $full_options{$name}->{validate} ) eq 'CODE' ) ;
             die "Option '$name' has validate and should either also have a default or be required"
-                if ( !( $full_options{$name}->{required} || $full_options{$name}->{default} ) );
-            my $coderef = $full_options{$name}->{validate};
-            my $result  = $coderef->( $_cmd_line_options{$name} );
-            show_usage("Option '$name' does not pass validation") if ( !$result );
+                if ( !( $full_options{$name}->{required} || $full_options{$name}->{default} ) ) ;
+            my $coderef = $full_options{$name}->{validate} ;
+            my $result  = $coderef->( $_cmd_line_options{$name} ) ;
+            show_usage("Option '$name' does not pass validation")
+                if ( !$result ) ;
         }
     }
 
-    return %_cmd_line_options;
+    # auto set verbose if it has been used
+    set_verbose( $_cmd_line_options{verbose} ) ;
+
+    return %_cmd_line_options ;
 }
 
 # ----------------------------------------------------------------------------
@@ -407,8 +598,9 @@ just a helper function
 
 =cut
 
-sub get_program {
-    return $PROGRAM;
+sub get_program
+{
+    return $PROGRAM ;
 }
 
 # ----------------------------------------------------------------------------
@@ -418,23 +610,25 @@ sub get_program {
 return the command line options hash
 just a helper function
 
-=cut 
+=cut
 
-sub get_options {
-    return %_cmd_line_options;
+sub get_options
+{
+    return %_cmd_line_options ;
 }
 
 # ----------------------------------------------------------------------------
 # handle the ctrl-c presses
 
-sub _app_simple_ctrlc_func {
+sub _app_simple_ctrlc_func
+{
 
     # exit if we are already in ctrlC
-    exit(2) if ( $_app_simple_ctrlc_count++ );
-    _output( 'STDERR', "\nCaught Ctrl-C. press again to exit immediately" );
+    exit(2) if ( $_app_simple_ctrlc_count++ ) ;
+    _output( 'STDERR', "\nCaught Ctrl-C. press again to exit immediately" ) ;
 
     # re-init the handler
-    $SIG{'INT'} = $_app_simple_ctrlc_handler;
+    $SIG{'INT'} = $_app_simple_ctrlc_handler ;
 }
 
 # ----------------------------------------------------------------------------
@@ -442,15 +636,16 @@ sub _app_simple_ctrlc_func {
 # to help with testing we may want to die, which can be caught rather than
 # exiting, so lets find out
 
-sub _exit_or_die {
-    my $state = shift || 1;
+sub _exit_or_die
+{
+    my $state = shift || 1 ;
 
     if ($_test_mode) {
-        STDERR->flush();
-        STDOUT->flush();
-        die "exit state $state";
+        STDERR->flush() ;
+        STDOUT->flush() ;
+        die "exit state $state" ;
     }
-    exit($state);
+    exit($state) ;
 }
 
 # ----------------------------------------------------------------------------
@@ -477,8 +672,9 @@ B<Sample output help>
 
 =cut
 
-sub show_usage {
-    my ( $msg, $state ) = @_;
+sub show_usage
+{
+    my ( $msg, $state ) = @_ ;
 
     my $help = qq{
 Syntax: $PROGRAM [options] $_app_simple_help_cmdline
@@ -486,19 +682,18 @@ Syntax: $PROGRAM [options] $_app_simple_help_cmdline
 About:  $_app_simple_help_text
 
 [options]
-$_app_simple_help_options};
+$_app_simple_help_options} ;
     if ($msg) {
 
         # if we have an error message it MUST go to STDERR
         # to make sure that any program the output is piped to
         # does not get the message to process
-        _output( 'STDERR', "$help\nError: $msg\n" );
-    }
-    else {
-        _output( 'STDOUT', $help );
+        _output( 'STDERR', "$help\nError: $msg\n" ) ;
+    } else {
+        _output( 'STDOUT', $help ) ;
     }
 
-    _exit_or_die($state);
+    _exit_or_die($state) ;
 }
 
 # ----------------------------------------------------------------------------
@@ -513,11 +708,12 @@ B<Parameters>
 
 =cut
 
-sub msg_exit {
-    my ( $msg, $state ) = @_;
+sub msg_exit
+{
+    my ( $msg, $state ) = @_ ;
 
-    _output( 'STDERR', $msg ) if ($msg);
-    _exit_or_die($state);
+    _output( 'STDERR', $msg ) if ($msg) ;
+    _exit_or_die($state) ;
 }
 
 # -----------------------------------------------------------------------------
@@ -534,31 +730,32 @@ B<Note: will die on errors>
 
 =cut
 
-sub daemonise {
-    my $rootdir = shift;
+sub daemonise
+{
+    my $rootdir = shift ;
 
     if ($rootdir) {
         chroot($rootdir)
-            or die "Could not chroot to $rootdir, only the root user can do this.";
+            or die "Could not chroot to $rootdir, only the root user can do this." ;
     }
 
     # fork once and let the parent exit
-    my $pid = fork();
+    my $pid = fork() ;
 
     # exit if $pid ;
     # parent to return 0, as it is logical
     if ($pid) {
-        return 0;
+        return 0 ;
     }
-    die "Couldn't fork: $!" unless defined $pid;
+    die "Couldn't fork: $!" unless defined $pid ;
 
     # disassociate from controlling terminal, leave the
     # process group behind
 
-    POSIX::setsid() or die "Can't start a new session";
+    POSIX::setsid() or die "Can't start a new session" ;
 
     # show that we have started a daemon process
-    return 1;
+    return 1 ;
 }
 
 # ----------------------------------------------------------------------------
@@ -568,7 +765,7 @@ sub daemonise {
  execute_cmd(command => ['/my/command','--args'], timeout => 10);
 
 Executes a command using IPC::Cmd::run_forked, less restrictive than run_cmd
-see L<IPC::Cmd> for more options that 
+see L<IPC::Cmd> for more options that
 
 Input hashref
 
@@ -591,13 +788,17 @@ Output HASHREF
 
 =cut
 
-sub execute_cmd {
-    my %args = @_;
-    my $command = $args{command} or die "command required";
+sub execute_cmd
+{
+    my %args = @_ ;
 
-    my $r = IPC::Cmd::run_forked( $command, \%args );
+    my $command = $args{command} or die "command required" ;
+    # pass everything thought encode incase there is utf8 there
+    utf8::encode($command) ;
 
-    return $r;
+    my $r = IPC::Cmd::run_forked( $command, \%args ) ;
+
+    return $r ;
 }
 
 # ----------------------------------------------------------------------------
@@ -616,21 +817,28 @@ my ($code, $out, $err) = run_cmd( 'ls') ;
 
 B<Parameters>
   string to run in the shell
+  timeout (optional) in seconds
 
 =cut
 
-sub run_cmd {
-    my $cmd = shift;
+sub run_cmd
+{
+    my ( $cmd, $timeout ) = @_ ;
 
     # use our local version of path so that it can pass taint checks
-    local $ENV{PATH} = $ENV{PATH};
+    local $ENV{PATH} = $ENV{PATH} ;
 
-    my ( $ret, $err, $full_buff, $stdout_buff, $stderr_buff ) = run( command => $cmd );
+    # pass everything thought encode incase there is utf8 there
+    utf8::encode($cmd) ;
 
-    my $stdout = join( "\n", @{$stdout_buff} );
-    my $stderr = join( "\n", @{$stderr_buff} );
+    my %data = ( command => $cmd ) ;
+    $data{timeout} = $timeout if ($timeout) ;
+    my ( $ret, $err, $full_buff, $stdout_buff, $stderr_buff ) = run(%data) ;
 
-    return ( !$ret, $stdout, $stderr );
+    my $stdout = join( "", @{$stdout_buff} ) ;
+    my $stderr = join( "", @{$stderr_buff} ) ;
+
+    return ( !$ret, $stdout, $stderr ) ;
 }
 
 # -----------------------------------------------------------------------------
@@ -644,44 +852,48 @@ B<Parameters>
 
 =cut
 
-sub fix_filename {
-    my $file = shift;
-    return if ( !$file );
+sub fix_filename
+{
+    my $file = shift ;
+    return if ( !$file ) ;
 
-    my $home = File::HomeDir->my_home;
-    $file =~ s/^~/$home/;
+    my $home = File::HomeDir->my_home ;
+    $file =~ s/^~/$home/ ;
     if ( $file =~ m|^\.\./| ) {
-        my $parent = path( Path::Tiny->cwd )->dirname;
-        $file =~ s|^(\.{2})/|$parent/|;
+        my $parent = path( Path::Tiny->cwd )->dirname ;
+        $file =~ s|^(\.{2})/|$parent/| ;
     }
     if ( $file =~ m|^\./| || $file eq '.' ) {
-        my $cwd = Path::Tiny->cwd;
-        $file =~ s|^(\.)/?|$cwd|;
+        my $cwd = Path::Tiny->cwd ;
+        $file =~ s|^(\.)/?|$cwd| ;
     }
 
     # replace multiple separators
-    $file =~ s|//|/|g;
-    return $file;
+    $file =~ s|//|/|g ;
+
+    # get the OS specific path
+    return path($file)->canonpath ;
 }
 
 # ----------------------------------------------------------------------------
 # Returns a hash containing a formatted name for each option. For example:
 # ( 'help|h|?' ) -> { 'help|h|?' => '-h, -?, --help' }
-sub _desc_names {
-    my %descs;
+sub _desc_names
+{
+    my %descs ;
     foreach my $o (@_) {
-        $_ = $o;    # Keep a copy of key in $o.
-        s/=.*$//;
+        $_ = $o ;    # Keep a copy of key in $o.
+        s/=.*$// ;
 
         # Sort by length so single letter options are shown first.
-        my @parts = sort { length $a <=> length $b } split /\|/;
+        my @parts = sort { length $a <=> length $b } split /\|/ ;
 
         # Single chars get - prefix, names get -- prefix.
-        my $s = join ", ", map { ( length > 1 ? '--' : '-' ) . $_ } @parts;
+        my $s = join ", ", map { ( length > 1 ? '--' : '-' ) . $_ } @parts ;
 
-        $descs{$o} = $s;
+        $descs{$o} = $s ;
     }
-    return %descs;
+    return %descs ;
 }
 
 # ----------------------------------------------------------------------------
@@ -689,8 +901,229 @@ sub _desc_names {
 # rather than exiting when doing some operations
 # also test mode will not output to STDERR/STDOUT
 
-sub set_test_mode {
-    $_test_mode = shift;
+sub set_test_mode
+{
+    $_test_mode = shift ;
+}
+
+# ----------------------------------------------------------------------------
+
+=item saymd
+
+convert markdown text into something that can be output onto the terminal
+
+saymd "# # Bringing MD Like Syntax To Bash Shell
+It should be something as ***easy***
+and as ___natural___ as writing text.
+
+> Keep It Simple
+> With quoted sections
+
+Is the idea
+
+  * behind
+  * all this
+
+~~~striking~~~ UX for `shell` users too.
+- - -
+#green(green text)
+bg#red(red background text)
+" ;
+
+=cut
+
+
+
+# saymd function taken and modied from
+# echomd -- An md like conversion tool for shell terminals
+# https://raw.githubusercontent.com/WebReflection/echomd/master/perl/echomd
+# some mod's of my own
+
+#
+# Fully inspired by the work of John Gruber
+# <http://daringfireball.net/projects/markdown/>
+#
+# -----------------------------------------------------------------------------
+# The MIT License (MIT)
+# Copyright (c) 2016 Andrea Giammarchi - @WebReflection
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom
+# the Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
+# THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+# -----------------------------------------------------------------------------
+
+# for *bold* _underline_ ~strike~ (strike on Linux only)
+# it works with both double **__~~ or just single *_~
+sub _bold_underline_strike
+{
+    my ($txt) = @_ ;
+    $txt =~ s/(\*{1,2})(?=\S)(.+?)(?<=\S)\1/\x1B[1m$2\x1B[22m/gs ;
+    $txt =~ s/(\_{1,2})(?=\S)(.+?)(?<=\S)\1/\x1B[4m$2\x1B[24m/gs ;
+    $txt =~ s/(\~{1,2})(?=\S)(.+?)(?<=\S)\1/\x1B[9m$2\x1B[29m/gs ;
+    return $txt ;
+}
+
+# for #color(text) or bg#bgcolor(text)
+# virtually compatible with #RGBA(text)
+# or for background via bg#RGBA(text)
+sub _color
+{
+    my ($txt) = @_ ;
+    $txt =~ s{(bg)?#([a-zA-Z0-9]{3,8})\((.+?)\)(?!\))}
+           {_get_color($1,$2,$3)}egs ;
+    return $txt ;
+}
+
+# for very important # Headers
+# and for less important ## One
+sub _header
+{
+    my ($txt) = @_ ;
+    $txt =~ s{^(\#{1,6})[ \t]+(.+?)[ \t]*\#*([\r\n]+|$)}
+           {_get_header($1,$2).$3}egm ;
+    return $txt ;
+}
+
+# for horizontal lines
+# --- or - - - or ___ or * * *
+sub _horizontal
+{
+    my ($txt) = @_ ;
+    my $line = "─" x 72 ;
+    $txt =~ s{^[ ]{0,2}([ ]?[\*_-][ ]?){3,}[ \t]*$}
+           {\x1B[1m$line\x1B[22m}gm ;
+    return $txt ;
+}
+
+# for lists such:
+#   * list 1
+#     etc, etc
+#   * list 2
+#   * list 3
+sub _list
+{
+    my ($txt) = @_ ;
+    $txt =~ s/^([ \t]{2,})[*+-]([ \t]{1,})/$1•$2/gm ;
+    return $txt ;
+}
+
+# for quoted text such:
+# > this is quote
+# > this is the rest of the quote
+sub _quote
+{
+    my ($txt) = @_ ;
+    $txt =~ s/^[ \t]*>([ \t]?)/\x1B[7m$1\x1B[27m$1/gm ;
+    return $txt ;
+}
+
+# HELPERS
+
+# used to grab colors by name
+sub _get_color
+{
+    my $bg  = $1 ;
+    my $rgb = $2 ;
+    my $out = "" ;
+    # one day, when it won't show experimental warnings
+    # given($rgb){
+    #   when("black")   { $out = "\x1B[30m" }
+    #   when("red")     { $out = "\x1B[31m" }
+    #   when("green")   { $out = "\x1B[32m" }
+    #   when("blue")    { $out = "\x1B[34m" }
+    #   when("magenta") { $out = "\x1B[35m" }
+    #   when("cyan")    { $out = "\x1B[36m" }
+    #   when("white")   { $out = "\x1B[37m" }
+    #   when("yellow")  { $out = "\x1B[39m" }
+    #   when("grey")    { $out = "\x1B[90m" }
+    # }
+    if ( $rgb eq "black" ) {
+        $out = "\x1B[30m" ;
+    } elsif ( $rgb eq "red" ) {
+        $out = "\x1B[31m" ;
+    } elsif ( $rgb eq "green" ) {
+        $out = "\x1B[32m" ;
+    } elsif ( $rgb eq "blue" ) {
+        $out = "\x1B[34m" ;
+    } elsif ( $rgb eq "magenta" ) {
+        $out = "\x1B[35m" ;
+    } elsif ( $rgb eq "cyan" ) {
+        $out = "\x1B[36m" ;
+    } elsif ( $rgb eq "white" ) {
+        $out = "\x1B[37m" ;
+    } elsif ( $rgb eq "yellow" ) {
+        $out = "\x1B[39m" ;
+    } elsif ( $rgb eq "grey" ) {
+        $out = "\x1B[90m" ;
+    }
+    $out .= ( $out eq "" ) ? $3 : "$3\x1B[39m" ;
+    return ( !defined $bg ) ? $out : "\x1B[7m$out\x1B[27m" ;
+}
+
+sub _get_header
+{
+    my ( $hash, $txt ) = @_ ;
+    if ( length($hash) eq 1 ) {
+        $txt = "\x1B[1m$txt\x1B[22m" ;
+    }
+    return "\x1B[7m $txt \x1B[27m" ;
+}
+
+# used to place parsed code back
+sub _get_source
+{
+    my ($hash) = @_ ;
+    my %code = %{ $_[1] } ;
+    for my $source ( keys %code ) {
+        if ( $code{$source} eq $hash ) {
+            return $source ;
+        }
+    }
+}
+
+# main transformer
+# takes care of code blocks too
+# without modifying their content
+# inline `code blocks` as well as
+# ```
+# multiline code blocks
+# ```
+sub saymd
+{
+    my ($txt) = @_ ;
+    my %code ;
+    # preserve code blocks
+    $txt =~ s{(`{2,})(.+?)(?<!`)\1(?!`)}
+           {$1.($code{$2}=md5_base64($2)).$1}egs ;
+    # preserve inline blocks too
+    $txt =~ s{(`)(.+?)\1}{$1.($code{$2}=md5_base64($2)).$1}egm ;
+    # converter everything else
+    $txt = _horizontal($txt) ;
+    $txt = _header($txt) ;
+    $txt = _bold_underline_strike($txt) ;
+    $txt = _list($txt) ;
+    $txt = _quote($txt) ;
+    $txt = _color($txt) ;
+    # put back inline blocks
+    $txt =~ s{(`)(.+?)\1}{$1._get_source($2,\%code).$1}egm ;
+    # put back code blocks too
+    $txt =~ s{(`{3})(.+?)(?<!`)\1(?!`)}
+           {$1._get_source($2,\%code).$1}egs ;
+    say $txt;
 }
 
 # ----------------------------------------------------------------------------
@@ -700,8 +1133,8 @@ END {
 
     # call any user supplied cleanup
     if ($_app_simple_cleanup_func) {
-        $_app_simple_cleanup_func->();
-        $_app_simple_cleanup_func = undef;
+        $_app_simple_cleanup_func->() ;
+        $_app_simple_cleanup_func = undef ;
     }
 }
 
@@ -711,4 +1144,4 @@ END {
 
 # ----------------------------------------------------------------------------
 
-1;
+1 ;

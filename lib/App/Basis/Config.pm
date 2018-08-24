@@ -7,7 +7,7 @@ App::Basis::Config
 =head1 SYNOPSIS
 
   use App::Basis::Config
- 
+
   my $cfg = App::Basis::Config->new( filename => "filename") ;
   # don't allow the store method to run, we don't want our configdata overwritten
   # my $cfg = App::Basis::Config->new( filename => "filename", nostore => 1) ;
@@ -41,16 +41,17 @@ This module is an extension to App::Basis to manage YAML config files in a simpl
 
 =cut
 
-package App::Basis::Config;
+package App::Basis::Config ;
 
-use 5.010;
-use warnings;
-use strict;
-use Moo;
-use YAML::XS qw( Load Dump);
-use Path::Tiny;
-use Try::Tiny;
-use App::Basis;
+use 5.010 ;
+use warnings ;
+use strict ;
+use Moo ;
+use YAML::XS qw( Load Dump) ;
+use Path::Tiny ;
+use Try::Tiny ;
+use App::Basis ;
+use experimental 'smartmatch' ;
 
 =head1 Public Functions
 
@@ -73,23 +74,23 @@ has raw => (
     init_arg => undef,        # dont allow setting in constructor
     default  => sub { {} },
     writer   => '_set_raw'
-);
+) ;
 
 has filename => (
     is       => 'ro',
     required => 0,
     writer   => '_set_filename'
-);
+) ;
 
 has nostore => (
     is      => 'ro',
     default => sub {0}
-);
+) ;
 
 has die_on_error => (
     is      => 'ro',
     default => sub {0}
-);
+) ;
 
 =item has_data
 
@@ -102,7 +103,7 @@ has has_data => (
     default  => sub {0},
     init_arg => undef,            # dont allow setting in constructor
     writer   => '_set_has_data'
-);
+) ;
 
 =item changed
 
@@ -116,7 +117,7 @@ has the config data changed since the last save, or mark it as changed
     # mark the data as changed
     $data->changed( 1) ;
     # save in the default config file
-    $data->store() ;    
+    $data->store() ;
 
 B<Parameter>
     flag        optional, used as a getter if flag is missing, otherwise a setter
@@ -128,7 +129,7 @@ has changed => (
     default  => sub {0},
     init_arg => undef,     # dont allow setting in constructor
                            # writer   => '_set_changed'
-);
+) ;
 
 =item error
 
@@ -141,7 +142,7 @@ has error => (
     default  => sub {undef},
     init_arg => undef,         # dont allow setting in constructor
     writer   => '_set_error'
-);
+) ;
 
 # ----------------------------------------------------------------------------
 
@@ -156,45 +157,44 @@ B<Parameters>  passed in a HASH
 
 =cut
 
-sub BUILD {
-    my $self = shift;
+sub BUILD
+{
+    my $self = shift ;
 
-    $self->_set_error(undef);
+    $self->_set_error(undef) ;
 
     # make sure that the we expand home
-    my $fname = fix_filename( $self->filename );
+    my $fname = fix_filename( $self->filename ) ;
 
     if ( !$fname ) {
-        $fname = $ENV{APP_BASIS_CFG} || fix_filename( "~/." . get_program() . ".cfg" );
+        $fname = $ENV{APP_BASIS_CFG} || fix_filename( "~/." . get_program() . ".cfg" ) ;
     }
     if ( $fname && -f $fname ) {
-        $self->_set_filename($fname);
+        $self->_set_filename($fname) ;
 
-        my $config;
+        my $config ;
         try {
-            $config = Load( path($fname)->slurp_utf8 );
+            $config = Load( path($fname)->slurp_utf8 ) ;
         }
         catch {
-            $self->_set_error(
-                "Could not read/processs config file $fname. $_");
-        };
+            $self->_set_error("Could not read/processs config file $fname. $_") ;
+        } ;
 
         # if there was a file to read from and we had an issue then we should
         # report it back to the caller somehow and make sure its seen.
         if ( $self->error ) {
-            die $self->error if ( $self->die_on_error );
-            warn $self->error;
+            die $self->error if ( $self->die_on_error ) ;
+            warn $self->error ;
         }
 
         # if we loaded some config
         if ( keys %$config ) {
-            $self->_set_has_data(1);
-            $self->_set_raw($config);
+            $self->_set_has_data(1) ;
+            $self->_set_raw($config) ;
         }
-    }
-    else {
-        $self->_set_error("could not establish a config filename");
-        die $self->error if ( $self->die_on_error );
+    } else {
+        $self->_set_error("could not establish a config filename") ;
+        die $self->error if ( $self->die_on_error ) ;
     }
 }
 
@@ -206,115 +206,135 @@ Saves the config data, will not maintain any comments from the original file.
 Will not perform save if no changes have been noted.
 
 B<Parameter>
-    filename        name of file to store config to, optional, will use object 
+    filename        name of file to store config to, optional, will use object
       instanced filename by default
 
 =cut
 
-sub store {
-    my $self      = shift;
-    my $filename  = shift;
-    my $need_save = 0;
-    my $status    = 0;
+sub store
+{
+    my $self      = shift ;
+    my $filename  = shift ;
+    my $need_save = 0 ;
+    my $status    = 0 ;
 
-    local $YAML::Indent = 4;
-
-    $self->_set_error(undef);
+    local $YAML::Indent = 4 ;
+    # verbose("storing") ;
+    $self->_set_error(undef) ;
     if ( !$filename ) {
-        $filename = $self->filename;
-        $need_save = 1 if ( $self->changed );
-    }
-    else {
-        $need_save = 1;
+        $filename = $self->filename ;
+        $need_save = 1 if ( $self->changed ) ;
+    } else {
+        $need_save = 1 ;
     }
 
     # only save if we need to
     if ($need_save) {
+        # verbose("need save") ;
         if ( $self->nostore ) {
-            warn "Attempt to save config file "
-                . $self->filename
-                . " when nostore has been used";
-            return 0;
+            warn "Attempt to save config file " . $self->filename . " when nostore has been used" ;
+            return 0 ;
         }
 
         # do the save
-        my $cfg = $self->raw;
+        my $cfg = $self->raw ;
         try {
             # do we need to create the directory to hold the file
             if ( !-d path($filename)->dirname ) {
-                path($filename)->dirname->mkpath;
+                path($filename)->dirname->mkpath ;
             }
-            path($filename)->spew_utf8( Dump($cfg) );
+            # verbose("dumping") ;
+
+            path($filename)->spew_utf8( Dump($cfg) ) ;
         }
         catch {
-            $self->_set_error(
-                "Could not save config file " . $self->filename() );
-            $status = 0;
-        };
-        die $self->error if ( $self->error && $self->die_on_error );
-        $self->changed(0);
-        $status = 1;
+            $self->_set_error( "Could not save config file " . $self->filename() ) ;
+            $status = 0 ;
+        } ;
+        die $self->error if ( $self->error && $self->die_on_error ) ;
+        $self->changed(0) ;
+        $status = 1 ;
     }
 
-    return $status;
+    return $status ;
 }
 
 # ----------------------------------------------------------------------------
 # return a ref to a item in the config or undef
+# path - path to get or set
+# value - a thing to  add
+# delete - flag to delete from the path
 # if $value is true then a path will be established and the value stored as the
 # final node
 
-sub _split_path {
-    my $self = shift;
-    my ( $path, $value ) = @_;
-    my $done            = 0;
-    my $path_separators = '/:\.';
+sub _split_path
+{
+    my $self = shift ;
+    my ( $path, $value, $delete ) = @_ ;
+    my $done            = 0 ;
+    my $path_separators = '/:\.' ;
 
     # remove any leading/trailing path separators
-    $path =~ s|^[$path_separators]?(.*)[$path_separators]?$|$1|;
+    $path =~ s|^[$path_separators]?(.*)[$path_separators]?$|$1| ;
 
-    my $ref = $self->raw;
-    my @items = split( /[$path_separators]/, $path );
+    my $ref = $self->raw ;
+    my @items = split( /[$path_separators]/, $path ) ;
     try {
         for ( my $i = 0; $i < scalar(@items); $i++ ) {
-            my $item = $items[$i];
+            my $item = $items[$i] ;
             if ( $ref->{$item} ) {
-                $ref  = $ref->{$item};
-                $done = 1;
-            }
-            else {
+                if ( $delete && ( $i + 1 ) == scalar(@items) ) {
+                    delete $ref->{$item} ;
+                    $done = 0 ;
+                    last ;
+                } else {
+                    # only store a new item when we have reached the end
+                    if ( $value && ( $i + 1 ) == scalar(@items) ) {
+                        $ref->{$item} = $value ;
+                        $ref          = $ref->{$item} ;
+                        $done         = 1 ;
+                        last ;
+                    }
+                    $ref  = $ref->{$item} ;
+                    $done = 1 ;
+                }
+            } else {
                 if ($value) {
-
                     # is this the last thing?
                     if ( ( $i + 1 ) == scalar(@items) ) {
-
                         # save the value in the last node
-                        $ref->{$item} = $value;
+                        $ref->{$item} = $value ;
+                        $ref          = $ref->{$item} ;
+                        $done         = 1 ;
+                        last ;
+                    } else {
+                        $ref->{$item} = {} ;
                     }
-                    else {
-                        $ref->{$item} = {};
-                    }
-                    $ref  = $ref->{$item};
-                    $done = 1;
-                }
-                else {
-
+                    $ref  = $ref->{$item} ;
+                    $done = 1 ;
+                } else {
                     # missed item
-                    $done = 0;
+                    $done = 0 ;
+                    # if we are not adding a value, then missing something in the tree
+                    # is a failure and we should stop
+                    last ;
                 }
             }
         }
     }
-    catch {};
+    catch {
+        $self->_set_error($_) ;
+        say STDERR "Error is $_" ;
+    } ;
 
-    return $done ? $ref : undef;
+    return $done ? $ref : undef ;
 }
 
 # ----------------------------------------------------------------------------
 
 =item get
 
-Retrieve an item of config data. We use a unix style filepath to separate out 
+Retrieve an item of config data. We use a unix style filepath to separate out
 the individual elements.
 
 We can also use ':' and '.' as path sepators, so valid paths are
@@ -340,22 +360,23 @@ B<Parameter>
 
 =cut
 
-sub get {
-    my $self = shift;
-    my $path = shift;
+sub get
+{
+    my $self = shift ;
+    my $path = shift ;
 
-    $self->_set_error(undef);
+    $self->_set_error(undef) ;
 
-    my $ref = $self->_split_path($path);
+    my $ref = $self->_split_path($path) ;
 
-    return $ref;
+    return $ref ;
 }
 
 # ----------------------------------------------------------------------------
 
 =item set
 
-Store an item into the config. 
+Store an item into the config.
 
     # set the value of an item into the config data based on a unix style path
     # this will mark the data as changed
@@ -373,20 +394,49 @@ B<Parameter>
 
 =cut
 
-sub set {
-    my $self = shift;
-    my ( $path, $value ) = @_;
+sub set
+{
+    my $self = shift ;
+    my ( $path, $value ) = @_ ;
+    my $status = 1 ;
+    my $delete = 0 ;
 
-    $self->_set_error(undef);
+    my $r = ref($value) ;
 
-    # create the path to the item
-    my $ref = $self->_split_path( $path, $value );
+    $self->_set_error(undef) ;
 
-    # if we loaded some config
-    $self->_set_has_data(1) if ( keys %{ $self->raw() } );
+    if ( !defined $value ) {
+        $delete = 1 ;
+        $value  = undef ;
+    } else {
+        $value ||= '' ;
+    }
 
-    # something has changed so we may need to save it later
-    $self->changed(1);
+    if ( $path eq '/' && $delete ) {
+        $self->clear() ;
+    } else {
+        my $current = $self->_split_path($path) || '' ;
+        # only update if it has changed, test as strings
+        if ( $current && $delete ) {
+            # verbose("deleting") ;
+            my $ref = $self->_split_path( $path, undef, $delete ) ;
+            # something has changed so we may need to save it later
+            $status = $self->changed(1) ;
+        } elsif ( !( $value ~~ $current ) ) {
+            # create the path to the item
+            # verbose("setting") ;
+            my $ref = $self->_split_path( $path, $value, $delete ) ;
+
+            # if we loaded some config
+            $self->_set_has_data(1) if ( keys %{ $self->raw() } ) ;
+
+            # something has changed so we may need to save it later
+            $status = $self->changed(1) ;
+        } else {
+            # verbose("not setting") ;
+        }
+    }
+    return $status ;
 }
 
 # ----------------------------------------------------------------------------
@@ -397,17 +447,18 @@ Clear all the data from the config, mark the config data as changed
 
 =cut
 
-sub clear {
-    my $self = shift;
-    my ( $path, $value ) = @_;
+sub clear
+{
+    my $self = shift ;
+    my ( $path, $value ) = @_ ;
 
-    $self->_set_error(undef);
+    $self->_set_error(undef) ;
 
-    $self->raw = {};
-    $self->_set_has_data(0);
+    $self->{raw} = {} ;
+    $self->_set_has_data(0) ;
 
     # something has changed so we may need to save it later
-    $self->changed(1);
+    $self->changed(1) ;
 }
 
 # ----------------------------------------------------------------------------
@@ -422,4 +473,4 @@ END {
 
 # ----------------------------------------------------------------------------
 
-1;
+1 ;

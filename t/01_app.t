@@ -20,7 +20,7 @@ use warnings;
 use Try::Tiny;
 use Path::Tiny ;
 use File::HomeDir ;
-use Test::More tests => 19;
+use Test::More tests => 20;
 
 my $logfile = "/tmp/$$.log" ;
 
@@ -246,6 +246,24 @@ catch {
 ok( $status, 'fails validated parameter' );
 $status = 0;
 
+try {
+    @ARGV = (  );
+    my %opt = init_app(
+        help_text => "Boiler plate code for an App::Basis app",
+        options   => {
+            'help|h' => "extra help",
+            "bill|h" => "reuse h"
+        }
+    );
+}
+catch {
+    note "  CORRECT: caught $_";
+    $status = 1;
+};
+ok( $status, 'duplication of options not allowed' );
+$status = 0;
+
+
 my $program = path($0)->basename ;
 ok( get_program() eq $program, 'get_program correct' );
 
@@ -267,20 +285,20 @@ ok( $r, 'run_cmd on invalid program' );
 my $current = Path::Tiny->cwd;
 my $file    = fix_filename("~/");
 my $home = File::HomeDir->my_home ;
-ok( $file =~ "^$home", "fix_filename with tilde" );
+ok( $file =~ "^$home", "fix_filename with tilde (expected $home, got $file)" );
 
 $file = fix_filename("./");
-ok( $file eq $current, "fix_filename with ./" );
+ok( $file eq $current, "fix_filename with ./ (expected $current, got $file)" );
 
 $file = fix_filename(".");
-ok( $file eq $current, "fix_filename with ." );
+ok( $file eq $current, "fix_filename with . (expected $current, got $file)" );
 
 $file = fix_filename("../");
 # my @tmp = split( /\//, $current );
 # pop @tmp;    # remove last directory
 # my $parent = join( '/', @tmp );    # rebuild
 # ok( $file eq "$parent/", "fix_filename with ../" );
-# just need to make sure that we have replaced it with something 
+# just need to make sure that we have replaced it with something
 ok( $file !~ /^\.\./, "fix_filename with ../") ;
 
 unlink( $logfile) ;
